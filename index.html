@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notion Date Widget</title>
+    <!-- Importing Inter font for a clean look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* DEFAULT CONFIGURATION */
+            --text-color: #333333;
+            --border-color: #333333;
+            --bg-color: transparent; 
+            
+            /* Sizing variables - Vertical Rectangle (1:2 ratio) */
+            --box-width: 100px;
+            --box-height: 200px;
+            --font-size-large: 3.5rem;
+            --font-size-small: 0.9rem;
+            --border-width: 3px;
+            --gap: 10px;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: var(--bg-color);
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; 
+        }
+
+        .widget-container {
+            display: flex;
+            gap: var(--gap);
+            position: relative; /* Context for absolute positioning if needed */
+        }
+
+        .box {
+            width: var(--box-width);
+            height: var(--box-height);
+            border: var(--border-width) solid var(--border-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-color);
+            position: relative;
+            box-sizing: border-box; 
+            background: rgba(255, 255, 255, 0.05);
+            transition: border-color 0.3s, color 0.3s;
+        }
+
+        /* The Day Number (Left Box) */
+        .day-num {
+            font-size: var(--font-size-large);
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        /* The Month Number (Right Box) */
+        .month-num {
+            font-size: var(--font-size-large);
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        /* The Day Name (Bottom Right of Right Box) */
+        .day-name {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            font-size: var(--font-size-small);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* --- Settings UI Styles --- */
+        .settings-toggle {
+            position: absolute;
+            top: 8px;   /* Positioned inside the top right of the box */
+            right: 8px;
+            opacity: 0; /* Hidden by default */
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.9);
+            transition: opacity 0.3s ease, background 0.2s;
+            z-index: 10;
+        }
+
+        .settings-toggle:hover {
+            background: #fff;
+            transform: scale(1.1);
+        }
+
+        /* Show toggle when hovering over the widget container */
+        .widget-container:hover .settings-toggle {
+            opacity: 1;
+        }
+
+        .settings-panel {
+            position: fixed; /* Fixed to center of screen */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 101;
+            font-size: 0.9rem;
+            color: #333;
+            min-width: 200px;
+            border: 1px solid #eee;
+        }
+
+        .settings-panel.active {
+            display: flex;
+        }
+
+        .control-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        input[type="color"] {
+            border: none;
+            width: 35px;
+            height: 35px;
+            cursor: pointer;
+            background: none;
+        }
+
+        .close-btn {
+            margin-top: 10px;
+            padding: 8px;
+            background: #333;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .close-btn:hover {
+            background: #000;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Settings Panel (Centered on screen) -->
+    <div class="settings-panel" id="settingsPanel">
+        <h3 style="margin: 0 0 5px 0; font-size: 1rem;">Widget Settings</h3>
+        <div class="control-group">
+            <label>Text Color</label>
+            <input type="color" id="textColorPicker" value="#333333">
+        </div>
+        <div class="control-group">
+            <label>Border Color</label>
+            <input type="color" id="borderColorPicker" value="#333333">
+        </div>
+        <div class="control-group">
+            <label>Background</label>
+            <input type="color" id="bgColorPicker" value="#ffffff">
+        </div>
+        <button class="close-btn" onclick="toggleSettings()">Save & Close</button>
+    </div>
+
+    <div class="widget-container">
+        <!-- Left Box: Day of Month (DD) -->
+        <div class="box" id="dayBox">
+            <span class="day-num" id="dayDisplay">01</span>
+        </div>
+
+        <!-- Right Box: Month (MM) + Day of Week -->
+        <div class="box" id="monthBox">
+            <!-- Settings Toggle Icon (Inside the right box) -->
+            <div class="settings-toggle" onclick="toggleSettings()" title="Customize Colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </div>
+            
+            <span class="month-num" id="monthDisplay">01</span>
+            <span class="day-name" id="weekdayDisplay">MON</span>
+        </div>
+    </div>
+
+    <script>
+        function updateDate() {
+            const now = new Date();
+            const day = String(now.getDate()).padStart(2, '0');
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const weekday = daysOfWeek[now.getDay()];
+
+            document.getElementById('dayDisplay').textContent = day;
+            document.getElementById('monthDisplay').textContent = month;
+            document.getElementById('weekdayDisplay').textContent = weekday;
+        }
+
+        // --- Color & Settings Logic ---
+
+        const root = document.documentElement;
+        const textPicker = document.getElementById('textColorPicker');
+        const borderPicker = document.getElementById('borderColorPicker');
+        const bgPicker = document.getElementById('bgColorPicker');
+
+        function toggleSettings() {
+            const panel = document.getElementById('settingsPanel');
+            panel.classList.toggle('active');
+        }
+
+        function updateColor(type, color) {
+            if (type === 'text') {
+                root.style.setProperty('--text-color', color);
+            } else if (type === 'border') {
+                root.style.setProperty('--border-color', color);
+            } else if (type === 'bg') {
+                root.style.setProperty('--bg-color', color);
+            }
+            updateURL();
+        }
+
+        function updateURL() {
+            const text = textPicker.value.replace('#', '');
+            const border = borderPicker.value.replace('#', '');
+            const bg = bgPicker.value.replace('#', '');
+            
+            // Updates the URL without reloading page
+            const newUrl = `${window.location.pathname}?text=${text}&border=${border}&bg=${bg}`;
+            window.history.replaceState(null, '', newUrl);
+        }
+
+        function applyURLStyles() {
+            const params = new URLSearchParams(window.location.search);
+            
+            if (params.has('text')) {
+                const color = '#' + params.get('text');
+                root.style.setProperty('--text-color', color);
+                textPicker.value = color;
+            }
+            if (params.has('border')) {
+                const color = '#' + params.get('border');
+                root.style.setProperty('--border-color', color);
+                borderPicker.value = color;
+            }
+            if (params.has('bg')) {
+                const color = '#' + params.get('bg');
+                root.style.setProperty('--bg-color', color);
+                bgPicker.value = color;
+            }
+        }
+
+        // Event Listeners for Pickers
+        textPicker.addEventListener('input', (e) => updateColor('text', e.target.value));
+        borderPicker.addEventListener('input', (e) => updateColor('border', e.target.value));
+        bgPicker.addEventListener('input', (e) => updateColor('bg', e.target.value));
+
+        // Initialize
+        applyURLStyles();
+        updateDate();
+        setInterval(updateDate, 60000);
+    </script>
+</body>
+</html>

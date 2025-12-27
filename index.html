@@ -133,7 +133,7 @@
             z-index: 101;
             font-size: 0.85rem;
             color: #333;
-            min-width: 250px;
+            min-width: 280px; /* Slightly wider for checkboxes */
             border: 1px solid #e0e0e0;
         }
 
@@ -169,6 +169,22 @@
             color: #555;
         }
         
+        .input-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-label {
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            color: #666;
+            user-select: none;
+        }
+
         input[type="color"] {
             border: 1px solid #ddd;
             border-radius: 4px;
@@ -240,19 +256,30 @@
         <!-- Colors -->
         <div class="control-group">
             <span class="control-label">Text Color</span>
-            <input type="color" id="textColorPicker" value="#111111">
+            <div class="input-wrapper">
+                <input type="color" id="textColorPicker" value="#111111">
+            </div>
         </div>
         <div class="control-group">
             <span class="control-label">Border Color</span>
-            <input type="color" id="borderColorPicker" value="#111111">
+            <div class="input-wrapper">
+                <label class="checkbox-label"><input type="checkbox" id="borderTransparent"> Transp.</label>
+                <input type="color" id="borderColorPicker" value="#111111">
+            </div>
         </div>
         <div class="control-group">
             <span class="control-label">Box Color</span>
-            <input type="color" id="boxBgPicker" value="#ffffff">
+            <div class="input-wrapper">
+                <label class="checkbox-label"><input type="checkbox" id="boxTransparent"> Transp.</label>
+                <input type="color" id="boxBgPicker" value="#ffffff">
+            </div>
         </div>
         <div class="control-group">
             <span class="control-label">Page Color</span>
-            <input type="color" id="pageBgPicker" value="#ffffff">
+            <div class="input-wrapper">
+                <label class="checkbox-label"><input type="checkbox" id="pageTransparent"> Transp.</label>
+                <input type="color" id="pageBgPicker" value="#ffffff">
+            </div>
         </div>
         
         <div class="divider"></div>
@@ -325,19 +352,37 @@
             height: document.getElementById('heightSlider'),
             textSize: document.getElementById('textSlider')
         };
+        
+        const transparentChecks = {
+            border: document.getElementById('borderTransparent'),
+            box: document.getElementById('boxTransparent'),
+            page: document.getElementById('pageTransparent')
+        };
 
         function toggleSettings() {
             document.getElementById('settingsPanel').classList.toggle('active');
         }
 
-        function updateStyle(key, value) {
-            // Colors
-            if (key === 'text') root.style.setProperty('--text-color', value);
-            if (key === 'border') root.style.setProperty('--border-color', value);
-            if (key === 'box') root.style.setProperty('--box-bg-color', value);
-            if (key === 'page') root.style.setProperty('--page-bg-color', value);
+        function updateColor(key) {
+            let val;
+            const isTransparent = transparentChecks[key] && transparentChecks[key].checked;
             
-            // Dimensions
+            if (isTransparent) {
+                val = 'transparent';
+            } else {
+                val = pickers[key].value;
+            }
+
+            if (key === 'text') root.style.setProperty('--text-color', val);
+            if (key === 'border') root.style.setProperty('--border-color', val);
+            if (key === 'box') root.style.setProperty('--box-bg-color', val);
+            if (key === 'page') root.style.setProperty('--page-bg-color', val);
+
+            saveSettings();
+            updateURLState();
+        }
+
+        function updateSize(key, value) {
             if (key === 'width') root.style.setProperty('--width-mult', value);
             if (key === 'height') root.style.setProperty('--height-mult', value);
             if (key === 'textSize') root.style.setProperty('--text-mult', value);
@@ -350,20 +395,33 @@
 
         function saveSettings() {
             const settings = {};
+            // Save Picker Values
             Object.keys(pickers).forEach(key => {
                 settings[key] = pickers[key].value;
+            });
+            // Save Checkbox States
+            Object.keys(transparentChecks).forEach(key => {
+                settings[key + 'Transp'] = transparentChecks[key].checked;
             });
             localStorage.setItem('notionWidgetSettings', JSON.stringify(settings));
         }
 
         function updateURLState() {
             const params = new URLSearchParams();
-            // Colors (strip hash)
+            
+            // Helper to determine what to put in URL
+            const getUrlVal = (key) => {
+                if (transparentChecks[key] && transparentChecks[key].checked) {
+                    return 'transparent';
+                }
+                return pickers[key].value.replace('#', '');
+            };
+
             params.set('text', pickers.text.value.replace('#', ''));
-            params.set('border', pickers.border.value.replace('#', ''));
-            params.set('box', pickers.box.value.replace('#', ''));
-            params.set('page', pickers.page.value.replace('#', ''));
-            // Sizes
+            params.set('border', getUrlVal('border'));
+            params.set('box', getUrlVal('box'));
+            params.set('page', getUrlVal('page'));
+            
             params.set('w', pickers.width.value);
             params.set('h', pickers.height.value);
             params.set('t', pickers.textSize.value);
@@ -376,44 +434,62 @@
             const params = new URLSearchParams(window.location.search);
             const saved = JSON.parse(localStorage.getItem('notionWidgetSettings')) || {};
 
+            // Helper to get value. 
+            // isColor=true implies it might be 'transparent' in URL, or hex.
             const getVal = (paramKey, savedKey, defaultVal, isColor) => {
-                // Priority: 1. URL Param, 2. Local Storage, 3. Default
+                // 1. URL
                 if (params.has(paramKey)) {
-                    const val = params.get(paramKey);
-                    return isColor ? '#' + val : val;
+                    let val = params.get(paramKey);
+                    if (isColor && val !== 'transparent') val = '#' + val;
+                    return val;
                 }
+                // 2. LocalStorage
+                // Note: Saved storage separates checkbox state from color value, so we handle that after.
+                // But for simplicity, we return default here and handle overrides below.
                 if (saved[savedKey]) return saved[savedKey];
                 return defaultVal;
             };
 
-            // Define Defaults
-            const defaults = {
-                text: getVal('text', 'text', '#111111', true),
-                border: getVal('border', 'border', '#111111', true),
-                box: getVal('box', 'box', '#ffffff', true),
-                page: getVal('page', 'page', '#ffffff', true),
-                width: getVal('w', 'width', '1', false),
-                height: getVal('h', 'height', '1', false),
-                textSize: getVal('t', 'textSize', '1', false)
+            // Set simple defaults (Pickers & Sliders)
+            pickers.text.value = getVal('text', 'text', '#111111', true);
+            pickers.border.value = getVal('border', 'border', '#111111', true);
+            pickers.box.value = getVal('box', 'box', '#ffffff', true);
+            pickers.page.value = getVal('page', 'page', '#ffffff', true);
+            
+            pickers.width.value = getVal('w', 'width', '1', false);
+            pickers.height.value = getVal('h', 'height', '1', false);
+            pickers.textSize.value = getVal('t', 'textSize', '1', false);
+
+            // Handle Transparency States
+            const applyTransparency = (key, paramKey) => {
+                if (!transparentChecks[key]) return;
+                
+                // If URL says 'transparent', ensure box is checked
+                if (params.has(paramKey) && params.get(paramKey) === 'transparent') {
+                    transparentChecks[key].checked = true;
+                } 
+                // Else if URL has hex, ensure uncheded
+                else if (params.has(paramKey)) {
+                     transparentChecks[key].checked = false;
+                }
+                // Else fallback to saved storage
+                else if (saved[key + 'Transp'] !== undefined) {
+                    transparentChecks[key].checked = saved[key + 'Transp'];
+                }
             };
 
-            // Apply to inputs and CSS
-            pickers.text.value = defaults.text;
-            pickers.border.value = defaults.border;
-            pickers.box.value = defaults.box;
-            pickers.page.value = defaults.page;
-            pickers.width.value = defaults.width;
-            pickers.height.value = defaults.height;
-            pickers.textSize.value = defaults.textSize;
+            applyTransparency('border', 'border');
+            applyTransparency('box', 'box');
+            applyTransparency('page', 'page');
 
-            // Trigger updates
-            updateStyle('text', defaults.text);
-            updateStyle('border', defaults.border);
-            updateStyle('box', defaults.box);
-            updateStyle('page', defaults.page);
-            updateStyle('width', defaults.width);
-            updateStyle('height', defaults.height);
-            updateStyle('textSize', defaults.textSize);
+            // Apply to CSS
+            updateColor('text');
+            updateColor('border');
+            updateColor('box');
+            updateColor('page');
+            updateSize('width', pickers.width.value);
+            updateSize('height', pickers.height.value);
+            updateSize('textSize', pickers.textSize.value);
         }
 
         function copyLink() {
@@ -438,8 +514,23 @@
         }
 
         // Event Listeners
+        
+        // Color Inputs
         Object.keys(pickers).forEach(key => {
-            pickers[key].addEventListener('input', (e) => updateStyle(key, e.target.value));
+            if(key === 'width' || key === 'height' || key === 'textSize') {
+                 pickers[key].addEventListener('input', (e) => updateSize(key, e.target.value));
+            } else {
+                 pickers[key].addEventListener('input', (e) => {
+                     // If user picks a color, uncheck transparent
+                     if(transparentChecks[key]) transparentChecks[key].checked = false;
+                     updateColor(key);
+                 });
+            }
+        });
+
+        // Checkboxes
+        Object.keys(transparentChecks).forEach(key => {
+            transparentChecks[key].addEventListener('change', () => updateColor(key));
         });
 
         // Init
